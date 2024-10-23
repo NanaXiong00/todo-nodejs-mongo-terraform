@@ -3,20 +3,20 @@ output "AZURE_COSMOS_CONNECTION_STRING_KEY" {
 }
 
 output "AZURE_COSMOS_DATABASE_NAME" {
-  value = module.cosmos.AZURE_COSMOS_DATABASE_NAME
+  value = keys(module.cosmos.mongo_databases)[0]
 }
 
 output "AZURE_KEY_VAULT_ENDPOINT" {
-  value     = module.keyvault.AZURE_KEY_VAULT_ENDPOINT
+  value     = module.keyvault.uri
   sensitive = true
 }
 
 output "REACT_APP_WEB_BASE_URL" {
-  value = module.web.URI
+  value = "https://${module.web.resource_uri}"
 }
 
 output "API_BASE_URL" {
-  value = var.useAPIM ? module.apimApi[0].SERVICE_API_URI : module.api.URI
+  value = var.useAPIM ? module.apimApi[0].SERVICE_API_URI : "https://${module.api.resource_uri}"
 }
 
 output "AZURE_LOCATION" {
@@ -24,7 +24,7 @@ output "AZURE_LOCATION" {
 }
 
 output "APPLICATIONINSIGHTS_CONNECTION_STRING" {
-  value     = module.applicationinsights.APPLICATIONINSIGHTS_CONNECTION_STRING
+  value     = module.applicationinsights.connection_string
   sensitive = true
 }
 
@@ -33,5 +33,5 @@ output "USE_APIM" {
 }
 
 output "SERVICE_API_ENDPOINTS" {
-  value = var.useAPIM ? [ module.apimApi[0].SERVICE_API_URI, module.api.URI ] : [] 
+  value = var.useAPIM ? [ module.apimApi[0].SERVICE_API_URI, module.api.resource_uri ] : [] 
 }
