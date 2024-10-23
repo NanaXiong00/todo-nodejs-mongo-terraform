@@ -24,16 +24,6 @@ resource "azurerm_resource_group" "rg" {
 # ------------------------------------------------------------------------------------------------------
 # Deploy application insights
 # ------------------------------------------------------------------------------------------------------
-# module "applicationinsights" {
-#   source           = "./modules/applicationinsights"
-#   location         = var.location
-#   rg_name          = azurerm_resource_group.rg.name
-#   environment_name = var.environment_name
-#   workspace_id     = module.loganalytics.LOGANALYTICS_WORKSPACE_ID
-#   tags             = azurerm_resource_group.rg.tags
-#   resource_token   = local.resource_token
-# }
-
 module "applicationinsights" {
   source  = "Azure/avm-res-insights-component/azurerm"
   version = "0.1.3"
@@ -58,17 +48,10 @@ module "dashboard" {
   }
   tags                = azurerm_resource_group.rg.tags
 }
+
 # ------------------------------------------------------------------------------------------------------
 # Deploy log analytics
 # ------------------------------------------------------------------------------------------------------
-# module "loganalytics" {
-#   source         = "./modules/loganalytics"
-#   location       = var.location
-#   rg_name        = azurerm_resource_group.rg.name
-#   tags           = azurerm_resource_group.rg.tags
-#   resource_token = local.resource_token
-# }
-
 module "loganalytics" {
   source  = "Azure/avm-res-operationalinsights-workspace/azurerm"
   version = "0.4.1"
@@ -83,22 +66,6 @@ module "loganalytics" {
 # ------------------------------------------------------------------------------------------------------
 # Deploy key vault
 # ------------------------------------------------------------------------------------------------------
-# module "keyvault" {
-#   source                   = "./modules/keyvault"
-#   location                 = var.location
-#   principal_id             = var.principal_id
-#   rg_name                  = azurerm_resource_group.rg.name
-#   tags                     = azurerm_resource_group.rg.tags
-#   resource_token           = local.resource_token
-#   access_policy_object_ids = [module.api.identity_principal_id]
-#   secrets = [
-#     {
-#       name  = local.cosmos_connection_string_key
-#       value = module.cosmos.cosmosdb_mongodb_connection_strings.primary_mongodb_connection_string
-#     }
-#   ]
-# }
-
 module "keyvault" {
   source  = "Azure/avm-res-keyvault-vault/azurerm"
   version = "0.9.1"
@@ -125,56 +92,20 @@ module "keyvault" {
       role_definition_id_or_name = "Key Vault Administrator"
       principal_id               = data.azurerm_client_config.current.object_id
     }
+    api = {
+      role_definition_id_or_name = "Key Vault Administrator"
+      principal_id               = module.api.identity_principal_id
+    }
   }
   wait_for_rbac_before_secret_operations = {
     create = "60s"
   }
   network_acls = null
-  legacy_access_policies_enabled = true
-  legacy_access_policies = {
-    api = {
-      object_id          = module.api.identity_principal_id
-      secret_permissions = [ 
-        "Get",
-        "Set",
-        "List",
-        "Delete"
-      ]
-    }
-    current_user = {
-      tenant_id = data.azurerm_client_config.current.tenant_id
-      object_id = data.azurerm_client_config.current.object_id
-      secret_permissions = [ 
-        "Get",
-        "Set",
-        "List",
-        "Delete",
-        "Purge"
-      ]
-    }
-    az = {
-      object_id          = "d164374b-2521-4e1a-b04d-dcb438233b9b"  //Microsoft Azure CLI: Object ID
-      secret_permissions = [ 
-        "Get",
-        "Set",
-        "List",
-        "Delete"
-      ]
-    }
-  }
 }
 
 # ------------------------------------------------------------------------------------------------------
 # Deploy cosmos
 # ------------------------------------------------------------------------------------------------------
-# module "cosmos" {
-#   source         = "./modules/cosmos"
-#   location       = var.location
-#   rg_name        = azurerm_resource_group.rg.name
-#   tags           = azurerm_resource_group.rg.tags
-#   resource_token = local.resource_token
-# }
-
 module "cosmos" {
   source  = "Azure/avm-res-documentdb-databaseaccount/azurerm"
   version = "0.3.0"
@@ -223,15 +154,6 @@ module "cosmos" {
 # ------------------------------------------------------------------------------------------------------
 # Deploy app service plan
 # ------------------------------------------------------------------------------------------------------
-# module "appserviceplan" {
-#   source         = "./modules/appserviceplan"
-#   location       = var.location
-#   rg_name        = azurerm_resource_group.rg.name
-#   tags           = azurerm_resource_group.rg.tags
-#   resource_token = local.resource_token
-#   sku_name       = "B3"
-# }
-
 module "appserviceplan" {
   source  = "Azure/avm-res-web-serverfarm/azurerm"
   version = "0.2.0"
@@ -247,23 +169,6 @@ module "appserviceplan" {
 # ------------------------------------------------------------------------------------------------------
 # Deploy app service web app
 # ------------------------------------------------------------------------------------------------------
-# module "web" {
-#   source         = "./modules/appservicenode"
-#   location       = var.location
-#   rg_name        = azurerm_resource_group.rg.name
-#   resource_token = local.resource_token
-
-#   tags               = merge(local.tags, { azd-service-name : "web" })
-#   service_name       = "web"   //
-#   appservice_plan_id = module.appserviceplan.APPSERVICE_PLAN_ID
-
-#   app_settings = {
-#     "SCM_DO_BUILD_DURING_DEPLOYMENT" = "false"
-#   }
-
-#   app_command_line = "pm2 serve /home/site/wwwroot --no-daemon --spa"
-# }
-
 module "web" {
   source              = "Azure/avm-res-web-site/azurerm"
   version             = "0.10.0"
@@ -292,31 +197,6 @@ module "web" {
 # ------------------------------------------------------------------------------------------------------
 # Deploy app service api
 # ------------------------------------------------------------------------------------------------------
-# module "api" {
-#   source         = "./modules/appservicenode"
-#   location       = var.location
-#   rg_name        = azurerm_resource_group.rg.name
-#   resource_token = local.resource_token
-
-#   tags               = merge(local.tags, { "azd-service-name" : "api" })
-#   service_name       = "api"
-#   appservice_plan_id = module.appserviceplan.APPSERVICE_PLAN_ID
-#   app_settings = {
-#     "AZURE_COSMOS_CONNECTION_STRING_KEY"    = local.cosmos_connection_string_key
-#     "AZURE_COSMOS_DATABASE_NAME"            = module.cosmos.AZURE_COSMOS_DATABASE_NAME
-#     "SCM_DO_BUILD_DURING_DEPLOYMENT"        = "true"
-#     "AZURE_KEY_VAULT_ENDPOINT"              = module.keyvault.AZURE_KEY_VAULT_ENDPOINT
-#     "APPLICATIONINSIGHTS_CONNECTION_STRING" = module.applicationinsights.APPLICATIONINSIGHTS_CONNECTION_STRING
-#     "API_ALLOW_ORIGINS"                     = "https://app-web-${local.resource_token}.azurewebsites.net"
-#   }
-
-#   app_command_line = ""
-
-#   identity = [{
-#     type = "SystemAssigned"
-#   }]
-# }
-
 module "api" {
   source              = "Azure/avm-res-web-site/azurerm"
   version             = "0.10.0"
