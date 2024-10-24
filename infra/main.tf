@@ -90,7 +90,7 @@ module "keyvault" {
   role_assignments = {
     user = {
       role_definition_id_or_name = "Key Vault Administrator"
-      principal_id               = data.azurerm_client_config.current.object_id
+      principal_id               = var.principal_id
     }
     api = {
       role_definition_id_or_name = "Key Vault Administrator"
@@ -110,7 +110,7 @@ module "cosmos" {
   source  = "Azure/avm-res-documentdb-databaseaccount/azurerm"
   version = "0.3.0"
   resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
+  location            = var.location
   name                = "cosmos-${local.resource_token}"
   tags                = azurerm_resource_group.rg.tags
   mongo_databases = {
@@ -136,6 +136,14 @@ module "cosmos" {
       }
     }
   }
+  capabilities = [
+    {
+      name = "EnableServerless"
+    }
+  ]
+  consistency_policy = {
+    consistency_level = "Session"
+  }
   backup = {
     type                = "Periodic"
     storage_redundancy  = "Geo"
@@ -159,11 +167,12 @@ module "appserviceplan" {
   version = "0.2.0"
   name                = "plan-${local.resource_token}"
   resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
+  location            = var.location
   os_type             = "Linux"
   tags                = azurerm_resource_group.rg.tags
   sku_name            = "B3"
-  zone_balancing_enabled = "false"
+  worker_count           = 1
+  zone_balancing_enabled = false
 }
 
 # ------------------------------------------------------------------------------------------------------
@@ -174,9 +183,11 @@ module "web" {
   version             = "0.10.0"
   name                = "app-web-${local.resource_token}"
   resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
+  location            = var.location
   tags                = merge(local.tags, { azd-service-name : "web" })
   kind                = "webapp"
+  os_type             = "Linux"
+  service_plan_resource_id = module.appserviceplan.resource_id
   app_settings        = {
     "SCM_DO_BUILD_DURING_DEPLOYMENT" = "false"
   }
@@ -190,8 +201,25 @@ module "web" {
     }
     always_on: true
   }
-  os_type            = "Linux"
-  service_plan_resource_id = module.appserviceplan.resource_id
+  logs = {
+    app_service_logs = {
+      http_logs = {
+        config1 = {
+          file_system = {
+            retention_in_days = 1
+            retention_in_mb   = 35
+          }
+        }
+      }
+      application_logs = {
+        config1 = {
+          file_system_level = "Verbose"
+        }
+      }
+      detailed_error_messages = true
+      failed_request_tracing  = true
+    }
+  }
 }
 
 # ------------------------------------------------------------------------------------------------------
@@ -202,9 +230,14 @@ module "api" {
   version             = "0.10.0"
   name                = "app-api-${local.resource_token}"
   resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
+  location            = var.location
   tags                = merge(local.tags, { azd-service-name : "api" })
   kind                = "webapp" 
+  os_type             = "Linux"
+  service_plan_resource_id = module.appserviceplan.resource_id
+  managed_identities  = {
+    system_assigned   = true
+  }
   app_settings        = {
     "AZURE_COSMOS_CONNECTION_STRING_KEY"    = local.cosmos_connection_string_key
     "AZURE_COSMOS_DATABASE_NAME"            = keys(module.cosmos.mongo_databases)[0]
@@ -214,6 +247,7 @@ module "api" {
     "API_ALLOW_ORIGINS"                     = "https://app-web-${local.resource_token}.azurewebsites.net"
   }
   site_config        = {
+    always_on        = true
     app_command_line = ""
     application_stack = {
       node = {
@@ -221,12 +255,25 @@ module "api" {
         node_version = "20-lts"
       }
     }
-    always_on: true
   }
-  os_type            = "Linux"
-  service_plan_resource_id = module.appserviceplan.resource_id
-  managed_identities = {
-    system_assigned = true
+  logs = {
+    app_service_logs = {
+      http_logs = {
+        config1 = {
+          file_system = {
+            retention_in_days = 1
+            retention_in_mb   = 35
+          }
+        }
+      }
+      application_logs = {
+        config1 = {
+          file_system_level = "Verbose"
+        }
+      }
+      detailed_error_messages = true
+      failed_request_tracing  = true
+    }
   }
 }
 
@@ -237,7 +284,7 @@ resource "null_resource" "api_set_allow_origins" {
   }
 
   provisioner "local-exec" {
-    command = "az webapp config appsettings set --resource-group ${azurerm_resource_group.rg.name} --name ${module.api.name} --settings API_ALLOW_ORIGINS=${module.web.resource_uri}"
+    command = "az webapp config appsettings set --resource-group ${azurerm_resource_group.rg.name} --name ${module.api.name} --settings API_ALLOW_ORIGINS=https://${module.web.resource_uri}"
   }
 }
 
