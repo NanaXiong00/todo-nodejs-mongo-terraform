@@ -26,8 +26,8 @@ resource "azurerm_resource_group" "rg" {
 # Deploy application insights
 # ------------------------------------------------------------------------------------------------------
 module "applicationinsights" {
-  source  = "Azure/avm-res-insights-component/azurerm"
-  version = "0.1.3"
+  source              = "Azure/avm-res-insights-component/azurerm"
+  version             = "0.1.3"
   enable_telemetry    = local.enable_telemetry
   location            = var.location
   name                = "appi-${local.resource_token}"
@@ -37,27 +37,27 @@ module "applicationinsights" {
 }
 
 module "dashboard" {
-  source  = "Azure/avm-res-portal-dashboard/azurerm"
-  version = "0.1.0"
+  source                  = "Azure/avm-res-portal-dashboard/azurerm"
+  version                 = "0.1.0"
   enable_telemetry        = local.enable_telemetry
   location                = var.location
   name                    = "dash-${local.resource_token}"
   resource_group_name     = azurerm_resource_group.rg.name
   template_file_path      = "./dashboard.tpl"
   template_file_variables = {
-    subscriptions_id = data.azurerm_client_config.current.subscription_id
-    resource_group_name = azurerm_resource_group.rg.name
+    subscriptions_id         = data.azurerm_client_config.current.subscription_id
+    resource_group_name      = azurerm_resource_group.rg.name
     applicationinsights_name = module.applicationinsights.name
   }
-  tags                = azurerm_resource_group.rg.tags
+  tags = azurerm_resource_group.rg.tags
 }
 
 # ------------------------------------------------------------------------------------------------------
 # Deploy log analytics
 # ------------------------------------------------------------------------------------------------------
 module "loganalytics" {
-  source  = "Azure/avm-res-operationalinsights-workspace/azurerm"
-  version = "0.4.1"
+  source                                    = "Azure/avm-res-operationalinsights-workspace/azurerm"
+  version                                   = "0.4.1"
   enable_telemetry                          = local.enable_telemetry
   location                                  = var.location
   resource_group_name                       = azurerm_resource_group.rg.name
@@ -71,8 +71,8 @@ module "loganalytics" {
 # Deploy key vault
 # ------------------------------------------------------------------------------------------------------
 module "keyvault" {
-  source  = "Azure/avm-res-keyvault-vault/azurerm"
-  version = "0.9.1"
+  source                         = "Azure/avm-res-keyvault-vault/azurerm"
+  version                        = "0.9.1"
   enable_telemetry               = local.enable_telemetry
   name                           = "kv-${local.resource_token}"
   location                       = var.location
@@ -111,8 +111,8 @@ module "keyvault" {
 # Deploy cosmos
 # ------------------------------------------------------------------------------------------------------
 module "cosmos" {
-  source  = "Azure/avm-res-documentdb-databaseaccount/azurerm"
-  version = "0.3.0"
+  source              = "Azure/avm-res-documentdb-databaseaccount/azurerm"
+  version             = "0.3.0"
   enable_telemetry    = local.enable_telemetry
   resource_group_name = azurerm_resource_group.rg.name
   location            = var.location
@@ -168,15 +168,15 @@ module "cosmos" {
 # Deploy app service plan
 # ------------------------------------------------------------------------------------------------------
 module "appserviceplan" {
-  source  = "Azure/avm-res-web-serverfarm/azurerm"
-  version = "0.2.0"
-  enable_telemetry    = local.enable_telemetry
-  name                = "plan-${local.resource_token}"
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = var.location
-  os_type             = "Linux"
-  tags                = azurerm_resource_group.rg.tags
-  sku_name            = "B3"
+  source                 = "Azure/avm-res-web-serverfarm/azurerm"
+  version                = "0.2.0"
+  enable_telemetry       = local.enable_telemetry
+  name                   = "plan-${local.resource_token}"
+  resource_group_name    = azurerm_resource_group.rg.name
+  location               = var.location
+  os_type                = "Linux"
+  tags                   = azurerm_resource_group.rg.tags
+  sku_name               = "B3"
   worker_count           = 1
   zone_balancing_enabled = false
 }
@@ -195,6 +195,10 @@ module "web" {
   kind                = "webapp"
   os_type             = "Linux"
   service_plan_resource_id = module.appserviceplan.resource_id
+  https_only          = true
+  app_settings        = {
+    "SCM_DO_BUILD_DURING_DEPLOYMENT" = "false"
+  }
   site_config         = {
     always_on         = true
     use_32_bit_worker = false
@@ -206,9 +210,6 @@ module "web" {
         current_stack = "node"
         node_version  = "20-lts"
       }
-    }
-    app_settings        = {
-      "SCM_DO_BUILD_DURING_DEPLOYMENT" = "false"
     }
     logs = {
       app_service_logs = {
@@ -250,6 +251,14 @@ module "api" {
   managed_identities  = {
     system_assigned   = true
   }
+  app_settings        = {
+    "AZURE_COSMOS_CONNECTION_STRING_KEY"    = local.cosmos_connection_string_key
+    "AZURE_COSMOS_DATABASE_NAME"            = keys(module.cosmos.mongo_databases)[0]
+    "SCM_DO_BUILD_DURING_DEPLOYMENT"        = "true"
+    "AZURE_KEY_VAULT_ENDPOINT"              = module.keyvault.uri
+    "APPLICATIONINSIGHTS_CONNECTION_STRING" = module.applicationinsights.connection_string
+    "API_ALLOW_ORIGINS"                     = "https://app-web-${local.resource_token}.azurewebsites.net"
+  }
   site_config         = {
     always_on         = true
     use_32_bit_worker = false
@@ -261,14 +270,6 @@ module "api" {
         current_stack = "node"
         node_version  = "20-lts"
       }
-    }
-    app_settings        = {
-      "AZURE_COSMOS_CONNECTION_STRING_KEY"    = local.cosmos_connection_string_key
-      "AZURE_COSMOS_DATABASE_NAME"            = keys(module.cosmos.mongo_databases)[0]
-      "SCM_DO_BUILD_DURING_DEPLOYMENT"        = "true"
-      "AZURE_KEY_VAULT_ENDPOINT"              = module.keyvault.uri
-      "APPLICATIONINSIGHTS_CONNECTION_STRING" = module.applicationinsights.connection_string
-      "API_ALLOW_ORIGINS"                     = "https://app-web-${local.resource_token}.azurewebsites.net"
     }
     logs = {
       app_service_logs = {
@@ -317,7 +318,7 @@ resource "null_resource" "webapp_basic_auth_disable" {
 # ------------------------------------------------------------------------------------------------------
 # Deploy app service apim
 # ------------------------------------------------------------------------------------------------------
-module "apim" { 
+module "apim" {
   count                     = var.useAPIM ? 1 : 0
   source                    = "./modules/apim"
   name                      = "apim-${local.resource_token}"
@@ -331,7 +332,7 @@ module "apim" {
 # ------------------------------------------------------------------------------------------------------
 # Deploy app service apim-api
 # ------------------------------------------------------------------------------------------------------
-module "apimApi" { 
+module "apimApi" {
   count                    = var.useAPIM ? 1 : 0
   source                   = "./modules/apim-api"
   name                     = module.apim[0].APIM_SERVICE_NAME
