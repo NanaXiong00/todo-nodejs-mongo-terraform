@@ -231,6 +231,8 @@ module "web" {
       }
     }
   }
+  webdeploy_publish_basic_authentication_enabled = false
+  ftp_publish_basic_authentication_enabled    = false
 }
 
 # ------------------------------------------------------------------------------------------------------
@@ -294,26 +296,26 @@ module "api" {
 }
 
 # Workaround: set API_ALLOW_ORIGINS to the web app URI
-resource "null_resource" "api_set_allow_origins" {
-  triggers = {
-    web_uri = module.web.resource_uri
-  }
+# resource "null_resource" "api_set_allow_origins" {
+#   triggers = {
+#     web_uri = module.web.resource_uri
+#   }
 
-  provisioner "local-exec" {
-    command = "az webapp config appsettings set --resource-group ${azurerm_resource_group.rg.name} --name ${module.api.name} --settings API_ALLOW_ORIGINS=https://${module.web.resource_uri}"
-  }
-}
+#   provisioner "local-exec" {
+#     command = "az webapp config appsettings set --resource-group ${azurerm_resource_group.rg.name} --name ${module.api.name} --settings API_ALLOW_ORIGINS=https://${module.web.resource_uri}"
+#   }
+# }
 
-# This is a temporary solution until the azurerm provider supports the basicPublishingCredentialsPolicies resource type
-resource "null_resource" "webapp_basic_auth_disable" {
-  triggers = {
-    account = module.web.name
-  }
+# # This is a temporary solution until the azurerm provider supports the basicPublishingCredentialsPolicies resource type
+# resource "null_resource" "webapp_basic_auth_disable" {
+#   triggers = {
+#     account = module.web.name
+#   }
  
-  provisioner "local-exec" {
-    command = "az resource update --resource-group ${azurerm_resource_group.rg.name} --name ftp --namespace Microsoft.Web --resource-type basicPublishingCredentialsPolicies --parent sites/${module.web.name} --set properties.allow=false && az resource update --resource-group ${azurerm_resource_group.rg.name} --name scm --namespace Microsoft.Web --resource-type basicPublishingCredentialsPolicies --parent sites/${module.web.name} --set properties.allow=false"
-  }
-}
+#   provisioner "local-exec" {
+#     command = "az resource update --resource-group ${azurerm_resource_group.rg.name} --name ftp --namespace Microsoft.Web --resource-type basicPublishingCredentialsPolicies --parent sites/${module.web.name} --set properties.allow=false && az resource update --resource-group ${azurerm_resource_group.rg.name} --name scm --namespace Microsoft.Web --resource-type basicPublishingCredentialsPolicies --parent sites/${module.web.name} --set properties.allow=false"
+#   }
+# }
 
 # ------------------------------------------------------------------------------------------------------
 # Deploy app service apim
